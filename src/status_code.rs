@@ -119,7 +119,7 @@ const statuses: [(i32, &str); 58] = [
     (NETWORK_AUTHENTICATION_REQUIRED, "511 Network Authentication Required")
 ];
 
-pub fn from_status_number(status_code: i32) -> String{
+pub fn from_status_code(status_code: i32) -> String{
     for status in statuses {
         if(status_code == status.0){
             return status.1.to_string();

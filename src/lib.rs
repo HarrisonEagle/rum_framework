@@ -1,7 +1,8 @@
 mod server;
 mod thread;
-mod router;
+pub mod router;
 pub mod status_code;
+
 pub mod rum {
     use crate::server::RumServer;
 
