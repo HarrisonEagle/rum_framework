@@ -1,95 +1,65 @@
 use fnv::FnvHashMap;
 use strum_macros::Display;
-
-pub struct RouterRootNode{
-    routes: FnvHashMap<String, Router>
-}
-
-
-impl RouterRootNode{
-    pub fn new() -> RouterRootNode{
-        return RouterRootNode{
-            routes: FnvHashMap::default()
-        };
-    }
-
-    pub fn show_routes(&self){
-        self.routes.keys();
-        for value in self.routes.values() {
-            value.show_routes(&value.route);
-        }
-    }
-
-    pub fn add(&mut self, method_type: MethodType, route: &str, handler: fn(Context) -> Response) {
-        let route_segs: Vec<&str> = route.trim_end_matches('/').split('/').collect();
-        if route_segs.len() > 0{
-            self.routes.entry( route_segs[0].to_string()).or_insert(Router {
-                route: route_segs[0].to_string(),
-                children: FnvHashMap::default(), 
-                handlers: Vec::new()
-            });
-            let cur_index = 0;
-            let router = self.routes.get_mut(route_segs[cur_index]).unwrap();
-            router.modify(route_segs, cur_index, method_type, handler);
-        }
-    }
-}
-
 pub struct Router {
     pub route: String,
     children: FnvHashMap<String, Router>,
-    handlers: Vec<(MethodType, fn(c: Context) -> Response)>
+    params_child_route: String,
+    handlers: FnvHashMap<String, fn(c: Context) -> Response>
 }
 
 impl Router {
 
-    fn show_routes(&self, route: &str){
+    pub(crate) fn new() -> Router{
+        return Router {
+            route: "".to_string(),
+            children: FnvHashMap::default(),
+            params_child_route: "".to_string(),
+            handlers: FnvHashMap::default(),
+        };
+    }
+
+    pub(crate) fn set_group() {
+
+    }
+
+    pub(crate) fn show_routes(&self, route: &str){
         if self.handlers.len() > 0 {
             for handler in &self.handlers{
                 println!("|{}| /{}",handler.0, route);
             }
         }
-        if self.children.len() > 0 {
-            for value in self.children.values()  {
-                let new_route = if route == "" { format!("{}",value.route) } else { format!("{}/{}",route, value.route) } ;
-                value.show_routes(&new_route);
-            }
+        for value in self.children.values()  {
+            let new_route = if route == "" { format!("{}",value.route) } else { format!("{}/{}",route, value.route) } ;
+            value.show_routes(&new_route);
         }
     }
 
-
-    pub fn handler_conflict(self, method_type: MethodType) -> bool{
-        for handler in self.handlers{
-            if matches!(handler.0, method_type){
-                return true;
-            }
-        }
-        return false;
-    }
-
-    pub fn modify(&mut self, route_segs: Vec<&str>, cur_index: usize, method_type: MethodType, handler: fn(Context) -> Response){
+    pub(crate) fn modify(&mut self, route_segs: Vec<&str>, cur_index: usize, method_type: MethodType, handler: fn(Context) -> Response){
+        let method_type_str = method_type.to_string();
         if cur_index == route_segs.len() - 1 {
-            if self.handlers.iter().any(|e| matches!(&e.0, method_type)) {
+            if self.handlers.contains_key(&method_type_str) {
                 // TODO: THROW ERROR
-            }else{
-                self.handlers.push((method_type, handler));
+                panic!("Error: Method->{} Route->{} already exists", method_type, self.route );
             }
+            self.handlers.insert(method_type_str, handler);
         }else{
+            let new_seg = route_segs[cur_index+1].to_string();
+            if new_seg.starts_with(":") {
+                if self.params_child_route != "" && new_seg != self.params_child_route{
+                    panic!("Error: params {} conflict with params {}", new_seg ,self.params_child_route);
+                }
+                self.params_child_route = new_seg;
+            }
             self.children.entry( route_segs[cur_index+1].to_string()).or_insert(Router {
-                route: route_segs[cur_index + 1].to_string(),
+                route: route_segs[cur_index+1].to_string(),
                 children: FnvHashMap::default(), 
-                handlers: Vec::new()
+                params_child_route: "".to_string(),
+                handlers: FnvHashMap::default()
             });
             let router = self.children.get_mut(route_segs[cur_index + 1]).unwrap();
             router.modify(route_segs, cur_index + 1, method_type, handler);
         }
     }
-    
-
-    pub fn insert_handler(&mut self, method: MethodType, handler: fn(Context) -> Response){
-        self.handlers.push((method, handler));
-    }
-
 
 }
 #[derive(Debug, Display)]
@@ -97,7 +67,11 @@ pub enum MethodType{
     GET,
     POST,
     PUT,
-    DELETE
+    DELETE,
+    CONNECT,
+    OPTIONS,
+    TRACE,
+    PATCH
 }
 
 pub enum ResponseType{

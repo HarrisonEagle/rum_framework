@@ -6,14 +6,14 @@ use std::thread::available_parallelism;
 use crate::router::Context;
 use crate::router::MethodType;
 use crate::router::Response;
-use crate::router::RouterRootNode;
+use crate::router::Router;
 use crate::status_code;
 use crate::thread::ThreadPool;
 use std::sync::Arc;
 pub struct RumServer {
     host: String,
     port: i32,
-    router: RouterRootNode,
+    router: Router,
 }
 
 impl RumServer {
@@ -22,7 +22,7 @@ impl RumServer {
         return RumServer{
             host: host.to_string(),
             port: port,
-            router: RouterRootNode::new()
+            router: Router::new()
         };
     }
 
@@ -34,7 +34,7 @@ impl RumServer {
         let pool_size = if available_parallelism_size < 4  { 4 } else { available_parallelism_size };
         let pool = ThreadPool::new(pool_size);
         let router = Arc::new(self.router);
-        router.show_routes();
+        router.show_routes("");
         for stream in listener.incoming() {
             let stream = stream.unwrap();
             let router =  Arc::clone(&router);
@@ -44,13 +44,49 @@ impl RumServer {
         }
     }
 
+    fn add_route(&mut self, method_type: MethodType, route: &str, handler: fn(Context) -> Response) {
+        let mut route_segs: Vec<&str> = route.trim_end_matches('/').split('/').collect();
+        if route_segs[0] != ""{
+            route_segs.insert(0, "");
+        }
+        self.router.modify(route_segs, 0, method_type, handler);
+    }
+
     pub fn get(&mut self, route: &str, handler: fn(Context) -> Response){
-        self.router.add(MethodType::GET, route, handler);
+        self.add_route(MethodType::GET, route, handler);
+    }
+
+    pub fn post(&mut self, route: &str, handler: fn(Context) -> Response){
+        self.add_route(MethodType::POST, route, handler);
+    }
+
+    pub fn put(&mut self, route: &str, handler: fn(Context) -> Response){
+        self.add_route(MethodType::PUT, route, handler);
+    }
+
+    pub fn delete(&mut self, route: &str, handler: fn(Context) -> Response){
+        self.add_route(MethodType::DELETE, route, handler);
+    }
+
+    pub fn connect(&mut self, route: &str, handler: fn(Context) -> Response){
+        self.add_route(MethodType::CONNECT, route, handler);
+    }
+
+    pub fn options(&mut self, route: &str, handler: fn(Context) -> Response){
+        self.add_route(MethodType::OPTIONS, route, handler);
+    }
+
+    pub fn trace(&mut self, route: &str, handler: fn(Context) -> Response){
+        self.add_route(MethodType::TRACE, route, handler);
+    }
+
+    pub fn patch(&mut self, route: &str, handler: fn(Context) -> Response){
+        self.add_route(MethodType::PATCH, route, handler);
     }
     
 }
 
-fn handle_connection(mut stream: TcpStream, router: Arc<RouterRootNode>) {
+fn handle_connection(mut stream: TcpStream, router: Arc<Router>) {
     let mut buffer = [0; 1024];
     stream.read(&mut buffer).unwrap();
     let requests = String::from_utf8_lossy(&buffer[..]);
