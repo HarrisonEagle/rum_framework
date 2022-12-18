@@ -5,6 +5,7 @@ pub struct Router {
     children: BTreeMap<String, Router>,
     params_child_route: String,
     handlers: BTreeMap<String, fn(c: Context) -> Response>,
+    full_route: Vec<String>,
 }
 
 impl Router {
@@ -15,8 +16,7 @@ impl Router {
             children: BTreeMap::new(),
             params_child_route: "".to_string(),
             handlers: BTreeMap::new(),
-            
-            
+            full_route: vec!["".to_string()]
         };
     }
     pub(crate) fn get_handler(&self,method_type: MethodType, route: &str){
@@ -81,13 +81,12 @@ impl Router {
                 }
                 self.params_child_route = new_seg;
             }
-            let str = &route_segs[..=cur_index+1];
             self.children.entry( route_segs[cur_index+1].to_string()).or_insert(Router {
                 route: route_segs[cur_index+1].to_string(),
                 children: BTreeMap::new(), 
                 params_child_route: "".to_string(),
-                handlers: BTreeMap::new()
-                
+                handlers: BTreeMap::new(),
+                full_route: (&route_segs[..=cur_index+1]).to_vec().iter().map(|s| s.to_string()).collect()
             });
             let router = self.children.get_mut(route_segs[cur_index + 1]).unwrap();
             router.modify(method_type,route_segs, cur_index + 1,  handler);
