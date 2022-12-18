@@ -2,6 +2,7 @@ use std::net::TcpListener;
 use std::net::TcpStream;
 use std::io::Read;
 use std::io::Write;
+use std::str::FromStr;
 use std::thread::available_parallelism;
 use crate::router::Context;
 use crate::router::MethodType;
@@ -10,6 +11,8 @@ use crate::router::Router;
 use crate::status_code;
 use crate::thread::ThreadPool;
 use std::sync::Arc;
+
+
 pub struct RumServer {
     host: String,
     port: i32,
@@ -29,7 +32,7 @@ impl RumServer {
     pub fn start(self){
         let addr = format!("{}:{}", self.host, self.port);
         let listener = TcpListener::bind(addr).unwrap();
-        println!("Listening: {}:{}", self.host, self.port);
+        println!("**RUM-FRAMEWORK** Listening: {}:{}", self.host, self.port);
         let available_parallelism_size = available_parallelism().unwrap().get();
         let pool_size = if available_parallelism_size < 4  { 4 } else { available_parallelism_size };
         let pool = ThreadPool::new(pool_size);
@@ -42,10 +45,6 @@ impl RumServer {
                 handle_connection(stream, router);
             });
         }
-    }
-
-    pub fn test(&self, method_type: MethodType, route: &str){
-        self.router.get_handler(method_type, route)
     }
 
     fn add_route(&mut self, method_type: MethodType, route: &str, handler: fn(Context) -> Response) {
@@ -94,22 +93,59 @@ fn handle_connection(mut stream: TcpStream, router: Arc<Router>) {
     let mut buffer = [0; 1024];
     stream.read(&mut buffer).unwrap();
     let requests = String::from_utf8_lossy(&buffer[..]);
-    for line in requests.lines() {
-        let kv = line.split(": ");
-        println!("{}",line);
-        for (i, el) in kv.enumerate() {
-            if i == 0 {
-                println!("key:{}",el);
-            }else {
-                println!("value:{}",el);
-            }
+    let mut http_method_str = "";
+    let mut route = "";
+    let mut http_ver = "";
+    let mut request_header_parsed = false;
+    let mut request_body = "".to_string();
+    for (index,line) in requests.lines().enumerate() {
+        if line.len() == 0 {
+            request_header_parsed = true;
+            continue;
+        }
+        if index == 0 {
+            let mut iter = line.splitn(3," ");
+            http_method_str = iter.next().unwrap();
+            route = iter.next().unwrap();
+            http_ver = iter.next().unwrap();
+        }else if !request_header_parsed{
+            let mut iter = line.splitn(2,": ");
+            let key = iter.next().unwrap();
+            let value = iter.next().unwrap();
+        }else {
+            request_body = format!("{}\r\n{}", request_body, line);
         }
     }
-    let status = status_code::from_status_code(status_code::OK);
-    let body = "<h1>hello1</h1>";
-    let response = format!("HTTP/1.1 {}\r\n\r\n{}", status, body);
+    let mut http_status = status_code::from_status_code(status_code::OK);
+    let mut response_body = "".to_string();
+    let mut response_header = "\r\n".to_string();
+    match MethodType::from_str(http_method_str) {
+        Ok(http_method_type) => {
+            let route_info = router.get_full_route(http_method_type, route);
+        match route_info {
+            Some(info) => {
+                router.exec_middleware(info.0, 0);
+                let response = info.1(Context {  });
+                http_status = response.http_status;
+                response_body = response.response_body;
+                response_header = format!("Content-Type: {}\r\n", response.content_type);
+            },
+            None => {
+                // NEED?
+                let response = Response::FILE(status_code::OK, route.trim_matches('/'));
+                http_status = response.http_status;
+                response_body = response.response_body;
+                response_header = format!("Content-Type: {}\r\n", response.content_type);
+            }
+    }
+        },
+        Err(_) => { },
+    }
+    let response = format!("{} {}\r\n{}\r\n{}", http_ver, http_status, response_header, response_body);
 
     stream.write(response.as_bytes()).unwrap();
     stream.flush().unwrap();
+
+    println!("|{}| {} {}", http_method_str, route ,http_status);
 
 }
