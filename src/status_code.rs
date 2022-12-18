@@ -58,7 +58,7 @@ pub const LOOP_DETECTED: i32 = 508;
 pub const NOT_EXTENDED: i32 = 510;
 pub const NETWORK_AUTHENTICATION_REQUIRED: i32 = 511;
 
-const statuses: [(i32, &str); 58] = [
+const STATUSES: [(i32, &str); 58] = [
     (CONTINUE,"100 Continue"),
     (SWITCHING_PROTOCOLS,"101 Switching Protocols"),
     (OK,"200 OK"),
@@ -120,8 +120,8 @@ const statuses: [(i32, &str); 58] = [
 ];
 
 pub fn from_status_code(status_code: i32) -> String{
-    for status in statuses {
-        if(status_code == status.0){
+    for status in STATUSES {
+        if status_code == status.0{
             return status.1.to_string();
         } 
     }

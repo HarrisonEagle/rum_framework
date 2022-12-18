@@ -44,7 +44,7 @@ impl RumServer {
         }
     }
 
-    pub fn GET(&mut self, route: &str, handler: fn(Context) -> Response){
+    pub fn get(&mut self, route: &str, handler: fn(Context) -> Response){
         self.router.add(MethodType::GET, route, handler);
     }
     
