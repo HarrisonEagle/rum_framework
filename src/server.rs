@@ -44,12 +44,16 @@ impl RumServer {
         }
     }
 
+    pub fn test(&self, method_type: MethodType, route: &str){
+        self.router.get_handler(method_type, route)
+    }
+
     fn add_route(&mut self, method_type: MethodType, route: &str, handler: fn(Context) -> Response) {
         let mut route_segs: Vec<&str> = route.trim_end_matches('/').split('/').collect();
         if route_segs[0] != ""{
             route_segs.insert(0, "");
         }
-        self.router.modify(route_segs, 0, method_type, handler);
+        self.router.modify(method_type,route_segs, 0,  handler);
     }
 
     pub fn get(&mut self, route: &str, handler: fn(Context) -> Response){
