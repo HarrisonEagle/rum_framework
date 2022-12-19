@@ -37,6 +37,10 @@ impl RumContext<'_> {
         };
     }
 
+    pub(crate) fn has_response(&self) -> bool{
+        return self.response.is_some();
+    }
+
     pub fn html(&mut self, status_code: i32, template_name: &str, context: &Context) {
         if self.template_engine.is_some() {
             let template = self.template_engine.unwrap();

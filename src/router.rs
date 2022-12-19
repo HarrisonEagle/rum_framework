@@ -9,7 +9,7 @@ pub struct Router {
     params_child_route: String,
     handlers: BTreeMap<String, fn(c: &mut RumContext)>,
     full_route: Vec<String>,
-    middleware: Vec<fn(c: &mut RumContext)>,
+    middlewares: Vec<fn(c: &mut RumContext)>,
 }
 
 impl Router {
@@ -20,7 +20,7 @@ impl Router {
             params_child_route: String::new(),
             handlers: BTreeMap::new(),
             full_route: Vec::new(),
-            middleware: Vec::new(),
+            middlewares: Vec::new(),
         };
     }
 
@@ -36,20 +36,23 @@ impl Router {
     }
 
     // exec middlewares and route handler
-    pub(crate) fn exec_middleware(&self, full_route: &[String], cur_index: usize) {
-        if cur_index == full_route.len() - 1 {
-        } else {
-            match self.children.get(&(full_route[cur_index + 1])) {
-                Some(handler) => {
-                    handler.exec_middleware(full_route, cur_index + 1);
-                }
-                None => {}
-            };
+    pub(crate) fn exec_middleware(&self, full_route: &[String], cur_index: usize, context: &mut RumContext) {
+        for middleware in &self.middlewares {
+            middleware(context);
+            if context.has_response() {
+                return;
+            }
         }
+        if cur_index + 1 < full_route.len() {
+            match self.children.get(&full_route[cur_index + 1]) {
+                Some(router) => {router.exec_middleware(full_route, cur_index + 1, context)},
+                None => (),
+            }
+        } 
     }
     
-    pub(crate) fn add_middleware(&self, handler: fn(&mut RumContext)){
-        
+    pub(crate) fn add_middleware(&mut self, handler: fn(&mut RumContext)){
+        self.middlewares.push(handler);
     }
 
     fn search_route(
@@ -132,7 +135,7 @@ impl Router {
                 children: BTreeMap::new(),
                 params_child_route: String::new(),
                 handlers: BTreeMap::new(),
-                middleware: Vec::new(),
+                middlewares: Vec::new(),
                 full_route: (&route_segs[..=cur_index + 1])
                     .to_vec()
                     .iter()
