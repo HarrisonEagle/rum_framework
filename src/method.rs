@@ -1,8 +1,7 @@
 use strum_macros::{Display, EnumString};
 
-
 #[derive(Debug, Display, EnumString)]
-pub enum MethodType{
+pub(crate) enum MethodType {
     GET,
     POST,
     PUT,
@@ -10,5 +9,5 @@ pub enum MethodType{
     CONNECT,
     OPTIONS,
     TRACE,
-    PATCH
+    PATCH,
 }
