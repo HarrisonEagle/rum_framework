@@ -5,8 +5,7 @@ use std::io::Write;
 use std::str::FromStr;
 use std::thread::available_parallelism;
 use crate::context::RumContext;
-use crate::router::MethodType;
-use crate::router::Response;
+use crate::method::MethodType;
 use crate::router::Router;
 use crate::status_code;
 use crate::thread::ThreadPool;
@@ -75,7 +74,7 @@ impl RumServer {
         }
     }
 
-    fn add_route(&mut self, method_type: MethodType, route: &str, handler: fn(RumContext) -> Response) {
+    fn add_route(&mut self, method_type: MethodType, route: &str, handler: fn(&mut RumContext)) {
         let mut route_segs: Vec<&str> = route.trim_end_matches('/').split('/').collect();
         if route_segs[0] != ""{
             route_segs.insert(0, "");
@@ -83,35 +82,35 @@ impl RumServer {
         self.router.modify(method_type,route_segs, 0,  handler);
     }
 
-    pub fn get(&mut self, route: &str, handler: fn(RumContext) -> Response){
+    pub fn get(&mut self, route: &str, handler: fn(&mut RumContext)){
         self.add_route(MethodType::GET, route, handler);
     }
 
-    pub fn post(&mut self, route: &str, handler: fn(RumContext) -> Response){
+    pub fn post(&mut self, route: &str, handler: fn(&mut RumContext)){
         self.add_route(MethodType::POST, route, handler);
     }
 
-    pub fn put(&mut self, route: &str, handler: fn(RumContext) -> Response){
+    pub fn put(&mut self, route: &str, handler: fn(&mut RumContext)){
         self.add_route(MethodType::PUT, route, handler);
     }
 
-    pub fn delete(&mut self, route: &str, handler: fn(RumContext) -> Response){
+    pub fn delete(&mut self, route: &str, handler: fn(&mut RumContext)){
         self.add_route(MethodType::DELETE, route, handler);
     }
 
-    pub fn connect(&mut self, route: &str, handler: fn(RumContext) -> Response){
+    pub fn connect(&mut self, route: &str, handler: fn(&mut RumContext)){
         self.add_route(MethodType::CONNECT, route, handler);
     }
 
-    pub fn options(&mut self, route: &str, handler: fn(RumContext) -> Response){
+    pub fn options(&mut self, route: &str, handler: fn(&mut RumContext)){
         self.add_route(MethodType::OPTIONS, route, handler);
     }
 
-    pub fn trace(&mut self, route: &str, handler: fn(RumContext) -> Response){
+    pub fn trace(&mut self, route: &str, handler: fn(&mut RumContext)){
         self.add_route(MethodType::TRACE, route, handler);
     }
 
-    pub fn patch(&mut self, route: &str, handler: fn(RumContext) -> Response){
+    pub fn patch(&mut self, route: &str, handler: fn(&mut RumContext)){
         self.add_route(MethodType::PATCH, route, handler);
     }
     
@@ -125,8 +124,11 @@ fn handle_connection(mut stream: TcpStream, root_router: Arc<RootRouter>) {
     let mut route = "";
     let mut http_ver = "";
     let mut request_header_parsed = false;
-    let mut request_body = "".to_string();
+    let mut request_body = String::new();
+    let context = &mut RumContext::new(root_router.template_engine.as_ref());
+    // parse the request
     for (index,line) in requests.lines().enumerate() {
+        // the border of header and body
         if line.len() == 0 {
             request_header_parsed = true;
             continue;
@@ -134,20 +136,56 @@ fn handle_connection(mut stream: TcpStream, root_router: Arc<RootRouter>) {
         if index == 0 {
             let mut iter = line.splitn(3," ");
             http_method_str = iter.next().unwrap();
-            route = iter.next().unwrap();
+            let route_with_query = iter.next().unwrap();
+            let mut iter_q = route_with_query.split("?");
+            route = iter_q.next().unwrap();
+            //parse query params
+            match iter_q.next() {
+                Some(q) => {
+                    let queries = q.split("&").into_iter();
+                    for query in queries{
+                        let mut iter_qi = query.splitn(2, "=");
+                        let key = iter_qi.next().unwrap_or_else(|| "");
+                        let val = iter_qi.next().unwrap_or_else(|| "");
+                        if key != "" && val != "" {
+                            context.set_query_params(key, val);
+                        }
+                    }
+                },
+                None => {},
+            }
             http_ver = iter.next().unwrap();
         }else if !request_header_parsed{
             let mut iter = line.splitn(2,": ");
             let key = iter.next().unwrap();
             let value = iter.next().unwrap();
+            context.set_request_header(key, value);
         }else {
-            request_body = format!("{}\r\n{}", request_body, line);
+            request_body = format!("{}{}", request_body, line);
         }
     }
-    let mut http_status = status_code::from_status_code(status_code::OK);
-    let mut response_body = "".to_string();
-    let mut response_header = "\r\n".to_string();
-    match MethodType::from_str(http_method_str) {
+
+    request_body = request_body.trim().to_string();
+    mime::APPLICATION_WWW_FORM_URLENCODED.to_string();
+    let content_type = match context.get_request_header("Content-Type") {
+        Some(value) => value,
+        None => "",
+    };
+    
+    if content_type.contains(&mime::APPLICATION_WWW_FORM_URLENCODED.to_string()){
+        let form_params = request_body.split("&").into_iter();
+            for param in form_params{
+                let mut iter_fi = param.splitn(2, "=");
+                let key = iter_fi.next().unwrap_or_else(|| "");
+                let val = iter_fi.next().unwrap_or_else(|| "");
+                if key != "" && val != "" {
+                    context.set_form_params(key, val);
+                }
+            }
+    }
+    context.set_request_body(request_body);
+    
+    let (response, http_status) = match MethodType::from_str(http_method_str) {
         Ok(http_method_type) => {
             let mut route_segs: Vec<&str> = route.trim_end_matches('/').split('/').collect();
             if route_segs[0] != ""{
@@ -156,39 +194,40 @@ fn handle_connection(mut stream: TcpStream, root_router: Arc<RootRouter>) {
             let route_seg_slice = &route_segs[..];
             let last_key = route_segs[route_segs.len() - 1];
             let route_info = root_router.router.get_full_route(http_method_type, route_seg_slice);
-            let context = RumContext::new(root_router.template_engine.as_ref());
-        match route_info {
-            Some(info) => {
-                route_seg_slice[0];
-                //root_router.router.exec_middleware(info.0, 0);
-                let response = info.1(context);
-                http_status = response.http_status;
-                response_body = response.response_body;
-                response_header = format!("Content-Type: {}\r\n", response.content_type);
-            },
-            None => {
-                // NEED?
-                let static_path = root_router.static_asset_path.as_ref();
-                if static_path.is_some() {
-                    let file_path = format!("{}/{}", *(static_path.unwrap()), last_key);
-                    let response = context.file(status_code::OK, &file_path);
-                    http_status = response.http_status;
-                    response_body = response.response_body;
-                    response_header = format!("Content-Type: {}\r\n", response.content_type);
-                }else{
-                    http_status = status_code::from_status_code(status_code::NOT_FOUND);
-                    response_body = "Not found".to_string();
-                }
+            match route_info {
+                Some((full_route_info, handler)) => {
+                    //root_router.router.exec_middleware(info.0, 0);
+                    for index in 0..full_route_info.len()-1 {
+                        if full_route_info[index].starts_with(":") {
+                            let key = full_route_info[index].trim_matches(':');
+                            let val = route_seg_slice[index];
+                            context.set_url_params(key, val);
+                        }
+                    }
+                    handler(context);
+                    context.get_response(http_ver)
+                },
+                None => {
+                    let static_path = root_router.static_asset_path.as_ref();
+                    if static_path.is_some() {
+                        let file_path = format!("{}/{}", *(static_path.unwrap()), last_key);
+                        context.file(status_code::OK, &file_path);
+                        context.get_response(http_ver)
+                    }else{
+                        context.default_404(http_ver)
+                    }
+                }  
             }
-    }
         },
-        Err(_) => {println!("Unknown Method!")},
-    }
-    let response = format!("{} {}\r\n{}\r\n{}", http_ver, http_status, response_header, response_body);
+        Err(_) => {
+            println!("Unknown Method!");
+            context.default_400(http_ver)
+        },
+    };
 
     stream.write(response.as_bytes()).unwrap();
     stream.flush().unwrap();
 
-    println!("|{}| {} {}", http_method_str, route ,http_status);
+    println!("|{}| {} {}", http_method_str, route , http_status);
 
 }

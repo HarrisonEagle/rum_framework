@@ -1,14 +1,13 @@
 use std::collections::BTreeMap;
-use strum_macros::Display;
 extern crate mime;
-use strum_macros::EnumString;
 use crate::context::RumContext;
+use crate::method::MethodType;
 
 pub struct Router {
     pub route: String,
     children: BTreeMap<String, Router>,
     params_child_route: String,
-    handlers: BTreeMap<String, fn(c: RumContext) -> Response>,
+    handlers: BTreeMap<String, fn(c: &mut RumContext)>,
     full_route: Vec<String>,
 }
 
@@ -16,15 +15,15 @@ impl Router {
 
     pub(crate) fn new() -> Router{
         return Router {
-            route: "".to_string(),
+            route: String::new(),
             children: BTreeMap::new(),
-            params_child_route: "".to_string(),
+            params_child_route: String::new(),
             handlers: BTreeMap::new(),
-            full_route: vec!["".to_string()]
+            full_route: vec![String::new()],
         };
     }
 
-    pub(crate) fn get_full_route(&self,method_type: MethodType, route_segs: &[&str]) -> Option<(&[String], &fn(RumContext) -> Response)>{
+    pub(crate) fn get_full_route(&self,method_type: MethodType, route_segs: &[&str]) -> Option<(&[String], &fn(&mut RumContext))>{
         return match self.search_route(method_type, route_segs, 0) {
             Some(result) => { Some(result) },
             None => { None },
@@ -43,7 +42,7 @@ impl Router {
         }
     }
 
-    fn search_route(&self, method_type: MethodType, route_segs: &[&str], cur_index: usize ) -> Option<(&[String], &fn(RumContext) -> Response)>{
+    fn search_route(&self, method_type: MethodType, route_segs: &[&str], cur_index: usize ) -> Option<(&[String], &fn(&mut RumContext))>{
         if cur_index == route_segs.len() - 1{
             for (key, value) in self.handlers.iter() {
                 if *key == method_type.to_string(){
@@ -76,59 +75,31 @@ impl Router {
         }
     }
 
-    pub(crate) fn modify(&mut self, method_type: MethodType, route_segs: Vec<&str>, cur_index: usize, handler: fn(RumContext) -> Response){
+    pub(crate) fn modify(&mut self, method_type: MethodType, route_segs: Vec<&str>, cur_index: usize, handler: fn(&mut RumContext)){
         let method_type_str = method_type.to_string();
         if cur_index == route_segs.len() - 1 {
             if self.handlers.contains_key(&method_type_str) {
-                // TODO: THROW ERROR
                 panic!("Error: Method->{} Route->{} already exists", method_type, self.route );
             }
             self.handlers.insert(method_type_str, handler);
         }else{
-            let new_seg = route_segs[cur_index+1].to_string();
+            let new_seg = route_segs[cur_index+1];
             if new_seg.starts_with(":") {
                 if self.params_child_route != "" && new_seg != self.params_child_route{
                     panic!("Error: params {} conflict with params {}", new_seg ,self.params_child_route);
                 }
-                self.params_child_route = new_seg;
+                self.params_child_route = new_seg.to_string();
             }
-            self.children.entry( route_segs[cur_index+1].to_string()).or_insert(Router {
-                route: route_segs[cur_index+1].to_string(),
+            self.children.entry( new_seg.to_string()).or_insert(Router {
+                route: new_seg.to_string(),
                 children: BTreeMap::new(), 
-                params_child_route: "".to_string(),
+                params_child_route: String::new(),
                 handlers: BTreeMap::new(),
-                full_route: (&route_segs[..=cur_index+1]).to_vec().iter().map(|s| s.to_string()).collect()
+                full_route: (&route_segs[..=cur_index+1]).to_vec().iter().map(|&s| s.to_string()).collect()
             });
             let router = self.children.get_mut(route_segs[cur_index + 1]).unwrap();
             router.modify(method_type,route_segs, cur_index + 1,  handler);
         }
     }
 
-}
-#[derive(Debug, Display, EnumString)]
-pub enum MethodType{
-    GET,
-    POST,
-    PUT,
-    DELETE,
-    CONNECT,
-    OPTIONS,
-    TRACE,
-    PATCH
-}
-
-pub enum ResponseType{
-    Text,
-    Html,
-    Json
-}
-
-pub struct Response{
-    pub(crate) http_status: String,
-    pub(crate) content_type: String,
-    pub(crate) response_body: String
-}
-
-impl Response {
-    
 }
