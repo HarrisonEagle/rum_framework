@@ -153,11 +153,13 @@ fn handle_connection(mut stream: TcpStream, root_router: Arc<RootRouter>) {
             if route_segs[0] != ""{
                 route_segs.insert(0, "");
             }
+            let route_seg_slice = &route_segs[..];
             let last_key = route_segs[route_segs.len() - 1];
-            let route_info = root_router.router.get_full_route(http_method_type, route_segs);
+            let route_info = root_router.router.get_full_route(http_method_type, route_seg_slice);
             let context = RumContext::new(root_router.template_engine.as_ref());
         match route_info {
             Some(info) => {
+                route_seg_slice[0];
                 //root_router.router.exec_middleware(info.0, 0);
                 let response = info.1(context);
                 http_status = response.http_status;

@@ -24,7 +24,7 @@ impl Router {
         };
     }
 
-    pub(crate) fn get_full_route(&self,method_type: MethodType, route_segs: Vec<&str>) -> Option<(&[String], &fn(RumContext) -> Response)>{
+    pub(crate) fn get_full_route(&self,method_type: MethodType, route_segs: &[&str]) -> Option<(&[String], &fn(RumContext) -> Response)>{
         return match self.search_route(method_type, route_segs, 0) {
             Some(result) => { Some(result) },
             None => { None },
@@ -43,7 +43,7 @@ impl Router {
         }
     }
 
-    fn search_route(&self, method_type: MethodType, route_segs: Vec<&str>, cur_index: usize ) -> Option<(&[String], &fn(RumContext) -> Response)>{
+    fn search_route(&self, method_type: MethodType, route_segs: &[&str], cur_index: usize ) -> Option<(&[String], &fn(RumContext) -> Response)>{
         if cur_index == route_segs.len() - 1{
             for (key, value) in self.handlers.iter() {
                 if *key == method_type.to_string(){
@@ -125,7 +125,6 @@ pub enum ResponseType{
 
 pub struct Response{
     pub(crate) http_status: String,
-    pub(crate) response_type: ResponseType,
     pub(crate) content_type: String,
     pub(crate) response_body: String
 }
