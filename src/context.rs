@@ -20,6 +20,7 @@ pub struct RumContext<'a> {
     url_params: BTreeMap<String, String>,
     query_params: BTreeMap<String, String>,
     form_params: BTreeMap<String, String>,
+    context_params: BTreeMap<String, String>,
     response: Option<Response>,
 }
 
@@ -33,6 +34,7 @@ impl RumContext<'_> {
             url_params: BTreeMap::default(),
             query_params: BTreeMap::default(),
             form_params: BTreeMap::default(),
+            context_params: BTreeMap::default(),
             response: None,
         };
     }
@@ -131,6 +133,10 @@ impl RumContext<'_> {
         };
     }
 
+    pub fn get_request_header(&self, key: &str) -> Option<&String> {
+        return self.request_header.get(key);
+    }
+
     pub(crate) fn set_request_header(&mut self, key: &str, value: &str) {
         self.request_header
             .insert(key.to_string(), value.to_string());
@@ -144,8 +150,13 @@ impl RumContext<'_> {
         return &self.request_body;
     }
 
-    pub fn get_request_header(&self, key: &str) -> Option<&String> {
-        return self.request_header.get(key);
+    pub fn get(&self, key: &str) -> Option<&String> {
+        return self.context_params.get(key);
+    }
+
+    pub fn set(&mut self, key: &str, value: &str) {
+        self.context_params
+            .insert(key.to_string(), value.to_string());
     }
 
     pub fn set_response_header(&mut self, key: &str, value: &str) {
