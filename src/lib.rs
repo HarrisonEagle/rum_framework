@@ -6,6 +6,7 @@ pub mod router;
 mod server;
 pub mod status_code;
 mod thread;
+mod lib_test;
 
 pub mod rum {
     use crate::server::RumServer;
