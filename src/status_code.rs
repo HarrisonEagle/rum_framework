@@ -59,13 +59,16 @@ pub const NOT_EXTENDED: i32 = 510;
 pub const NETWORK_AUTHENTICATION_REQUIRED: i32 = 511;
 
 const STATUSES: [(i32, &str); 58] = [
-    (CONTINUE,"100 Continue"),
-    (SWITCHING_PROTOCOLS,"101 Switching Protocols"),
-    (OK,"200 OK"),
-    (CREATED,"201 Created"),
-    (ACCEPTED,"202 Accepted"),
-    (NON_AUTHORITATIVE_INFORMATION,"203 Non-Authoritative Information"),
-    (NO_CONTENT,"204 No Content"),
+    (CONTINUE, "100 Continue"),
+    (SWITCHING_PROTOCOLS, "101 Switching Protocols"),
+    (OK, "200 OK"),
+    (CREATED, "201 Created"),
+    (ACCEPTED, "202 Accepted"),
+    (
+        NON_AUTHORITATIVE_INFORMATION,
+        "203 Non-Authoritative Information",
+    ),
+    (NO_CONTENT, "204 No Content"),
     (RESET_CONTENT, "205 Reset Content"),
     (PARTIAL_CONTENT, "206 Partial Content"),
     (MULTI_STATUS, "207 Multi-Status"),
@@ -85,7 +88,10 @@ const STATUSES: [(i32, &str); 58] = [
     (NOT_FOUND, "404 Not Found"),
     (METHOD_NOT_ALLOWED, "405 Method Not Allowed"),
     (NOT_ACCEPTABLE, "406 Not Acceptable"),
-    (PROXY_AUTHENTICATION_REQUIRED, "407 Proxy Authentication Required"),
+    (
+        PROXY_AUTHENTICATION_REQUIRED,
+        "407 Proxy Authentication Required",
+    ),
     (REQUEST_TIMEOUT, "408 Request Timeout"),
     (CONFLICT, "409 Conflict"),
     (GONE, "410 Gone"),
@@ -104,8 +110,14 @@ const STATUSES: [(i32, &str); 58] = [
     (UPGRADE_REQUIRED, "426 Upgrade Required"),
     (PRECONDITION_REQUIRED, "428 Precondition Required"),
     (TOO_MANY_REQUESTS, "429 Too Many Requests"),
-    (REQUEST_HEADER_FIELDS_TOO_LARGE, "431 Request Header Fields Too Large"),
-    (UNAVAILABLE_FOR_LEGAL_REASONS, "451 Unavailable For Legal Reasons"),
+    (
+        REQUEST_HEADER_FIELDS_TOO_LARGE,
+        "431 Request Header Fields Too Large",
+    ),
+    (
+        UNAVAILABLE_FOR_LEGAL_REASONS,
+        "451 Unavailable For Legal Reasons",
+    ),
     (INTERNAL_SERVER_ERROR, "500 Internal Server Error"),
     (NOT_IMPLEMENTED, "501 Not Implemented"),
     (BAD_GATEWAY, "502 Bad Gateway"),
@@ -116,14 +128,17 @@ const STATUSES: [(i32, &str); 58] = [
     (INSUFFICIENT_STORAGE, "507 Insufficient Storage"),
     (LOOP_DETECTED, "508 Loop Detected"),
     (NOT_EXTENDED, "510 Not Extended"),
-    (NETWORK_AUTHENTICATION_REQUIRED, "511 Network Authentication Required")
+    (
+        NETWORK_AUTHENTICATION_REQUIRED,
+        "511 Network Authentication Required",
+    ),
 ];
 
-pub fn from_status_code(status_code: i32) -> String{
+pub fn from_status_code(status_code: i32) -> String {
     for status in STATUSES {
-        if status_code == status.0{
+        if status_code == status.0 {
             return status.1.to_string();
-        } 
+        }
     }
     return String::new();
 }

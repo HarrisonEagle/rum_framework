@@ -13,6 +13,3 @@ pub mod rum {
         return RumServer::new(host, port);
     }
 }
-
-
-    
