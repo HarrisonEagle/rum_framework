@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 extern crate mime;
 use crate::context::RumContext;
 use crate::method::MethodType;
-use crate::response::Response;
 
 pub struct Router {
     pub route: String,
@@ -16,11 +15,11 @@ impl Router {
 
     pub(crate) fn new() -> Router{
         return Router {
-            route: "".to_string(),
+            route: String::new(),
             children: BTreeMap::new(),
-            params_child_route: "".to_string(),
+            params_child_route: String::new(),
             handlers: BTreeMap::new(),
-            full_route: vec!["".to_string()],
+            full_route: vec![String::new()],
         };
     }
 
@@ -95,7 +94,7 @@ impl Router {
             self.children.entry( route_segs[cur_index+1].to_string()).or_insert(Router {
                 route: route_segs[cur_index+1].to_string(),
                 children: BTreeMap::new(), 
-                params_child_route: "".to_string(),
+                params_child_route: String::new(),
                 handlers: BTreeMap::new(),
                 full_route: (&route_segs[..=cur_index+1]).to_vec().iter().map(|s| s.to_string()).collect()
             });

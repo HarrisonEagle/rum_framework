@@ -2,7 +2,7 @@ use std::{str::from_utf8_unchecked, io::{BufReader, Read}, fs::File, collections
 
 use tera::{Context, Tera};
 
-use crate::{ status_code::{self, HTTP_VERSION_NOT_SUPPORTED, INTERNAL_SERVER_ERROR, NOT_FOUND, from_status_code, BAD_REQUEST}, response::{Response, self}};
+use crate::{ status_code::{self,INTERNAL_SERVER_ERROR, NOT_FOUND, from_status_code, BAD_REQUEST}, response::Response};
 
 pub struct RumContext<'a>{
     template_engine: Option<&'a Tera>,
@@ -18,7 +18,7 @@ impl RumContext<'_> {
         return RumContext{
             template_engine: template_engine,
             request_header: BTreeMap::default(),
-            request_body: "".to_string(),
+            request_body: String::new(),
             response_header: BTreeMap::default(),
             response: None,
         };
@@ -120,21 +120,18 @@ impl RumContext<'_> {
 
     pub fn set_response_header(&mut self, key: &str, value: &str){
         self.response_header.insert(key.to_string(), value.to_string());
+        println!("Header: {}", self.response_header.len());
     }
 
     pub fn remove_response_header(&mut self, key: &str){
         self.response_header.remove(key);
     }
 
-    pub(crate) fn get_response_headers(&self){
-        let mut response_headers = String::new();
-        
-    }
-
     pub(crate) fn get_response(&self, http_ver: &str) -> (String, String){
         return match &self.response{
             Some(response) => {
-                response.get_response(http_ver)
+                let response_header = self.response_header.iter().map(|(k,v)| format!("{}: {}\r\n", k, v)).collect();
+                response.get_response(http_ver, response_header)
             },
             None => {
                 let status = from_status_code(INTERNAL_SERVER_ERROR);

@@ -6,7 +6,6 @@ use std::str::FromStr;
 use std::thread::available_parallelism;
 use crate::context::RumContext;
 use crate::method::MethodType;
-use crate::response::Response;
 use crate::router::Router;
 use crate::status_code;
 use crate::thread::ThreadPool;
@@ -125,7 +124,7 @@ fn handle_connection(mut stream: TcpStream, root_router: Arc<RootRouter>) {
     let mut route = "";
     let mut http_ver = "";
     let mut request_header_parsed = false;
-    let mut request_body = "".to_string();
+    let mut request_body = String::new();
     let context = &mut RumContext::new(root_router.template_engine.as_ref());
     for (index,line) in requests.lines().enumerate() {
         if line.len() == 0 {

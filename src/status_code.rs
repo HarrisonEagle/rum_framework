@@ -125,5 +125,5 @@ pub fn from_status_code(status_code: i32) -> String{
             return status.1.to_string();
         } 
     }
-    return "".to_string();
+    return String::new();
 }
