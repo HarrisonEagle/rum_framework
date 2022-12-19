@@ -2,13 +2,30 @@ use std::net::TcpListener;
 use std::net::TcpStream;
 use std::io::Read;
 use std::io::Write;
+use std::str::FromStr;
 use std::thread::available_parallelism;
+use crate::context::RumContext;
+use crate::router::MethodType;
+use crate::router::Response;
 use crate::router::Router;
+use crate::status_code;
 use crate::thread::ThreadPool;
 use std::sync::Arc;
+use tera::Tera;
+
+
 pub struct RumServer {
     host: String,
     port: i32,
+    router: Router,
+    static_asset_path: Option<String>,
+    template_engine: Option<Tera>
+}
+
+struct RootRouter {
+    router: Router,
+    static_asset_path: Option<String>,
+    template_engine: Option<Tera>
 }
 
 impl RumServer {
@@ -16,54 +33,162 @@ impl RumServer {
     pub fn new(host: &str, port: i32) -> RumServer {
         return RumServer{
             host: host.to_string(),
-            port: port
+            port: port,
+            router: Router::new(),
+            static_asset_path: None,
+            template_engine: None,
         };
     }
 
+    pub fn use_html_template(&mut self, templates_path: &str){
+        self.template_engine = match Tera::new(templates_path) {
+            Ok(t) => Some(t),
+            Err(e) => {
+                panic!("Reading path in {} failed!\n{}\n", templates_path, e.to_string());
+            }
+        };
+    }
+
+    pub fn use_static_assets(&mut self, static_asset_path: &str){
+        self.static_asset_path = Some(static_asset_path.to_string());
+    }
+
     pub fn start(self){
-        let rum = self;
-        let addr = format!("{}:{}", rum.host, rum.port);
+        let addr = format!("{}:{}", self.host, self.port);
         let listener = TcpListener::bind(addr).unwrap();
+        println!("**RUM-FRAMEWORK** Listening: {}:{}", self.host, self.port);
         let available_parallelism_size = available_parallelism().unwrap().get();
         let pool_size = if available_parallelism_size < 4  { 4 } else { available_parallelism_size };
         let pool = ThreadPool::new(pool_size);
-        let router = Arc::new(Router{});
-        
-    
+        let root_router = Arc::new(RootRouter{
+            router: self.router,
+            static_asset_path: self.static_asset_path,
+            template_engine: self.template_engine
+        });
+        root_router.router.show_routes("");
         for stream in listener.incoming() {
             let stream = stream.unwrap();
-            let router =  Arc::clone(&router);
-            
+            let router =  Arc::clone(&root_router);
             pool.execute(move || {
                 handle_connection(stream, router);
             });
         }
     }
+
+    fn add_route(&mut self, method_type: MethodType, route: &str, handler: fn(RumContext) -> Response) {
+        let mut route_segs: Vec<&str> = route.trim_end_matches('/').split('/').collect();
+        if route_segs[0] != ""{
+            route_segs.insert(0, "");
+        }
+        self.router.modify(method_type,route_segs, 0,  handler);
+    }
+
+    pub fn get(&mut self, route: &str, handler: fn(RumContext) -> Response){
+        self.add_route(MethodType::GET, route, handler);
+    }
+
+    pub fn post(&mut self, route: &str, handler: fn(RumContext) -> Response){
+        self.add_route(MethodType::POST, route, handler);
+    }
+
+    pub fn put(&mut self, route: &str, handler: fn(RumContext) -> Response){
+        self.add_route(MethodType::PUT, route, handler);
+    }
+
+    pub fn delete(&mut self, route: &str, handler: fn(RumContext) -> Response){
+        self.add_route(MethodType::DELETE, route, handler);
+    }
+
+    pub fn connect(&mut self, route: &str, handler: fn(RumContext) -> Response){
+        self.add_route(MethodType::CONNECT, route, handler);
+    }
+
+    pub fn options(&mut self, route: &str, handler: fn(RumContext) -> Response){
+        self.add_route(MethodType::OPTIONS, route, handler);
+    }
+
+    pub fn trace(&mut self, route: &str, handler: fn(RumContext) -> Response){
+        self.add_route(MethodType::TRACE, route, handler);
+    }
+
+    pub fn patch(&mut self, route: &str, handler: fn(RumContext) -> Response){
+        self.add_route(MethodType::PATCH, route, handler);
+    }
     
 }
 
-fn handle_connection(mut stream: TcpStream, router: Arc<Router>) {
+fn handle_connection(mut stream: TcpStream, root_router: Arc<RootRouter>) {
     let mut buffer = [0; 1024];
-
     stream.read(&mut buffer).unwrap();
-
     let requests = String::from_utf8_lossy(&buffer[..]);
-    for line in requests.lines() {
-        let kv = line.split(": ");
-        println!("{}",line);
-        for (i, el) in kv.enumerate() {
-            if i == 0 {
-                println!("key:{}",el);
-            }else {
-                println!("value:{}",el);
-            }
+    let mut http_method_str = "";
+    let mut route = "";
+    let mut http_ver = "";
+    let mut request_header_parsed = false;
+    let mut request_body = "".to_string();
+    for (index,line) in requests.lines().enumerate() {
+        if line.len() == 0 {
+            request_header_parsed = true;
+            continue;
+        }
+        if index == 0 {
+            let mut iter = line.splitn(3," ");
+            http_method_str = iter.next().unwrap();
+            route = iter.next().unwrap();
+            http_ver = iter.next().unwrap();
+        }else if !request_header_parsed{
+            let mut iter = line.splitn(2,": ");
+            let key = iter.next().unwrap();
+            let value = iter.next().unwrap();
+        }else {
+            request_body = format!("{}\r\n{}", request_body, line);
         }
     }
-    let status = "200 OK";
-    let body = "<h1>hello1</h1>";
-    let response = format!("HTTP/1.1 {}\r\n\r\n{}", status, body);
+    let mut http_status = status_code::from_status_code(status_code::OK);
+    let mut response_body = "".to_string();
+    let mut response_header = "\r\n".to_string();
+    match MethodType::from_str(http_method_str) {
+        Ok(http_method_type) => {
+            let mut route_segs: Vec<&str> = route.trim_end_matches('/').split('/').collect();
+            if route_segs[0] != ""{
+                route_segs.insert(0, "");
+            }
+            let route_seg_slice = &route_segs[..];
+            let last_key = route_segs[route_segs.len() - 1];
+            let route_info = root_router.router.get_full_route(http_method_type, route_seg_slice);
+            let context = RumContext::new(root_router.template_engine.as_ref());
+        match route_info {
+            Some(info) => {
+                route_seg_slice[0];
+                //root_router.router.exec_middleware(info.0, 0);
+                let response = info.1(context);
+                http_status = response.http_status;
+                response_body = response.response_body;
+                response_header = format!("Content-Type: {}\r\n", response.content_type);
+            },
+            None => {
+                // NEED?
+                let static_path = root_router.static_asset_path.as_ref();
+                if static_path.is_some() {
+                    let file_path = format!("{}/{}", *(static_path.unwrap()), last_key);
+                    let response = context.file(status_code::OK, &file_path);
+                    http_status = response.http_status;
+                    response_body = response.response_body;
+                    response_header = format!("Content-Type: {}\r\n", response.content_type);
+                }else{
+                    http_status = status_code::from_status_code(status_code::NOT_FOUND);
+                    response_body = "Not found".to_string();
+                }
+            }
+    }
+        },
+        Err(_) => {println!("Unknown Method!")},
+    }
+    let response = format!("{} {}\r\n{}\r\n{}", http_ver, http_status, response_header, response_body);
 
     stream.write(response.as_bytes()).unwrap();
     stream.flush().unwrap();
+
+    println!("|{}| {} {}", http_method_str, route ,http_status);
 
 }
