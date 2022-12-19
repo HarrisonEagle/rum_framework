@@ -140,6 +140,10 @@ impl RumContext<'_> {
         self.request_body = request_body;
     }
 
+    pub fn get_request_body(&self) -> &String {
+        return &self.request_body;
+    }
+
     pub fn get_request_header(&self, key: &str) -> Option<&String> {
         return self.request_header.get(key);
     }

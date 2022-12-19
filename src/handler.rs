@@ -132,6 +132,8 @@ impl Handler {
                     context.set_form_params(key, val);
                 }
             }
+        }else if  content_type.contains(&mime::APPLICATION_JSON.to_string()) {
+            request_body = request_body.chars().filter(|c| !c.is_whitespace()).collect();
         }
         context.set_request_body(request_body);
 
