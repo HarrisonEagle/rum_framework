@@ -4,19 +4,28 @@ use std::io::Read;
 use std::io::Write;
 use std::str::FromStr;
 use std::thread::available_parallelism;
-use crate::router::Context;
+use crate::context::RumContext;
 use crate::router::MethodType;
 use crate::router::Response;
 use crate::router::Router;
 use crate::status_code;
 use crate::thread::ThreadPool;
 use std::sync::Arc;
+use tera::Tera;
 
 
 pub struct RumServer {
     host: String,
     port: i32,
     router: Router,
+    static_asset_path: Option<String>,
+    template_engine: Option<Tera>
+}
+
+struct RootRouter {
+    router: Router,
+    static_asset_path: Option<String>,
+    template_engine: Option<Tera>
 }
 
 impl RumServer {
@@ -25,8 +34,23 @@ impl RumServer {
         return RumServer{
             host: host.to_string(),
             port: port,
-            router: Router::new()
+            router: Router::new(),
+            static_asset_path: None,
+            template_engine: None,
         };
+    }
+
+    pub fn use_html_template(&mut self, templates_path: &str){
+        self.template_engine = match Tera::new(templates_path) {
+            Ok(t) => Some(t),
+            Err(e) => {
+                panic!("Reading path in {} failed!\n{}\n", templates_path, e.to_string());
+            }
+        };
+    }
+
+    pub fn use_static_assets(&mut self, static_asset_path: &str){
+        self.static_asset_path = Some(static_asset_path.to_string());
     }
 
     pub fn start(self){
@@ -36,18 +60,22 @@ impl RumServer {
         let available_parallelism_size = available_parallelism().unwrap().get();
         let pool_size = if available_parallelism_size < 4  { 4 } else { available_parallelism_size };
         let pool = ThreadPool::new(pool_size);
-        let router = Arc::new(self.router);
-        router.show_routes("");
+        let root_router = Arc::new(RootRouter{
+            router: self.router,
+            static_asset_path: self.static_asset_path,
+            template_engine: self.template_engine
+        });
+        root_router.router.show_routes("");
         for stream in listener.incoming() {
             let stream = stream.unwrap();
-            let router =  Arc::clone(&router);
+            let router =  Arc::clone(&root_router);
             pool.execute(move || {
                 handle_connection(stream, router);
             });
         }
     }
 
-    fn add_route(&mut self, method_type: MethodType, route: &str, handler: fn(Context) -> Response) {
+    fn add_route(&mut self, method_type: MethodType, route: &str, handler: fn(RumContext) -> Response) {
         let mut route_segs: Vec<&str> = route.trim_end_matches('/').split('/').collect();
         if route_segs[0] != ""{
             route_segs.insert(0, "");
@@ -55,41 +83,41 @@ impl RumServer {
         self.router.modify(method_type,route_segs, 0,  handler);
     }
 
-    pub fn get(&mut self, route: &str, handler: fn(Context) -> Response){
+    pub fn get(&mut self, route: &str, handler: fn(RumContext) -> Response){
         self.add_route(MethodType::GET, route, handler);
     }
 
-    pub fn post(&mut self, route: &str, handler: fn(Context) -> Response){
+    pub fn post(&mut self, route: &str, handler: fn(RumContext) -> Response){
         self.add_route(MethodType::POST, route, handler);
     }
 
-    pub fn put(&mut self, route: &str, handler: fn(Context) -> Response){
+    pub fn put(&mut self, route: &str, handler: fn(RumContext) -> Response){
         self.add_route(MethodType::PUT, route, handler);
     }
 
-    pub fn delete(&mut self, route: &str, handler: fn(Context) -> Response){
+    pub fn delete(&mut self, route: &str, handler: fn(RumContext) -> Response){
         self.add_route(MethodType::DELETE, route, handler);
     }
 
-    pub fn connect(&mut self, route: &str, handler: fn(Context) -> Response){
+    pub fn connect(&mut self, route: &str, handler: fn(RumContext) -> Response){
         self.add_route(MethodType::CONNECT, route, handler);
     }
 
-    pub fn options(&mut self, route: &str, handler: fn(Context) -> Response){
+    pub fn options(&mut self, route: &str, handler: fn(RumContext) -> Response){
         self.add_route(MethodType::OPTIONS, route, handler);
     }
 
-    pub fn trace(&mut self, route: &str, handler: fn(Context) -> Response){
+    pub fn trace(&mut self, route: &str, handler: fn(RumContext) -> Response){
         self.add_route(MethodType::TRACE, route, handler);
     }
 
-    pub fn patch(&mut self, route: &str, handler: fn(Context) -> Response){
+    pub fn patch(&mut self, route: &str, handler: fn(RumContext) -> Response){
         self.add_route(MethodType::PATCH, route, handler);
     }
     
 }
 
-fn handle_connection(mut stream: TcpStream, router: Arc<Router>) {
+fn handle_connection(mut stream: TcpStream, root_router: Arc<RootRouter>) {
     let mut buffer = [0; 1024];
     stream.read(&mut buffer).unwrap();
     let requests = String::from_utf8_lossy(&buffer[..]);
@@ -121,25 +149,38 @@ fn handle_connection(mut stream: TcpStream, router: Arc<Router>) {
     let mut response_header = "\r\n".to_string();
     match MethodType::from_str(http_method_str) {
         Ok(http_method_type) => {
-            let route_info = router.get_full_route(http_method_type, route);
+            let mut route_segs: Vec<&str> = route.trim_end_matches('/').split('/').collect();
+            if route_segs[0] != ""{
+                route_segs.insert(0, "");
+            }
+            let last_key = route_segs[route_segs.len() - 1];
+            let route_info = root_router.router.get_full_route(http_method_type, route_segs);
+            let context = RumContext::new(root_router.template_engine.as_ref());
         match route_info {
             Some(info) => {
-                router.exec_middleware(info.0, 0);
-                let response = info.1(Context {  });
+                //root_router.router.exec_middleware(info.0, 0);
+                let response = info.1(context);
                 http_status = response.http_status;
                 response_body = response.response_body;
                 response_header = format!("Content-Type: {}\r\n", response.content_type);
             },
             None => {
                 // NEED?
-                let response = Response::FILE(status_code::OK, route.trim_matches('/'));
-                http_status = response.http_status;
-                response_body = response.response_body;
-                response_header = format!("Content-Type: {}\r\n", response.content_type);
+                let static_path = root_router.static_asset_path.as_ref();
+                if static_path.is_some() {
+                    let file_path = format!("{}/{}", *(static_path.unwrap()), last_key);
+                    let response = context.file(status_code::OK, &file_path);
+                    http_status = response.http_status;
+                    response_body = response.response_body;
+                    response_header = format!("Content-Type: {}\r\n", response.content_type);
+                }else{
+                    http_status = status_code::from_status_code(status_code::NOT_FOUND);
+                    response_body = "Not found".to_string();
+                }
             }
     }
         },
-        Err(_) => { },
+        Err(_) => {println!("Unknown Method!")},
     }
     let response = format!("{} {}\r\n{}\r\n{}", http_ver, http_status, response_header, response_body);
 

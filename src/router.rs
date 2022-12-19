@@ -2,19 +2,13 @@ use std::collections::BTreeMap;
 use strum_macros::Display;
 extern crate mime;
 use strum_macros::EnumString;
-use crate::status_code;
-
-use std::str::from_utf8_unchecked;
-use std::fs::File;
-use std::fs::metadata;
-use std::io::Read;
-use std::io::BufReader;
+use crate::context::RumContext;
 
 pub struct Router {
     pub route: String,
     children: BTreeMap<String, Router>,
     params_child_route: String,
-    handlers: BTreeMap<String, fn(c: Context) -> Response>,
+    handlers: BTreeMap<String, fn(c: RumContext) -> Response>,
     full_route: Vec<String>,
 }
 
@@ -30,11 +24,7 @@ impl Router {
         };
     }
 
-    pub(crate) fn get_full_route(&self,method_type: MethodType, route: &str) -> Option<(&[String], &fn(Context) -> Response)>{
-        let mut route_segs: Vec<&str> = route.trim_end_matches('/').split('/').collect();
-        if route_segs[0] != ""{
-            route_segs.insert(0, "");
-        }
+    pub(crate) fn get_full_route(&self,method_type: MethodType, route_segs: Vec<&str>) -> Option<(&[String], &fn(RumContext) -> Response)>{
         return match self.search_route(method_type, route_segs, 0) {
             Some(result) => { Some(result) },
             None => { None },
@@ -53,7 +43,7 @@ impl Router {
         }
     }
 
-    fn search_route(&self, method_type: MethodType, route_segs: Vec<&str>, cur_index: usize ) -> Option<(&[String], &fn(Context) -> Response)>{
+    fn search_route(&self, method_type: MethodType, route_segs: Vec<&str>, cur_index: usize ) -> Option<(&[String], &fn(RumContext) -> Response)>{
         if cur_index == route_segs.len() - 1{
             for (key, value) in self.handlers.iter() {
                 if *key == method_type.to_string(){
@@ -86,7 +76,7 @@ impl Router {
         }
     }
 
-    pub(crate) fn modify(&mut self, method_type: MethodType, route_segs: Vec<&str>, cur_index: usize, handler: fn(Context) -> Response){
+    pub(crate) fn modify(&mut self, method_type: MethodType, route_segs: Vec<&str>, cur_index: usize, handler: fn(RumContext) -> Response){
         let method_type_str = method_type.to_string();
         if cur_index == route_segs.len() - 1 {
             if self.handlers.contains_key(&method_type_str) {
@@ -133,11 +123,6 @@ pub enum ResponseType{
     Json
 }
 
-pub struct Context{
-
-
-}
-
 pub struct Response{
     pub(crate) http_status: String,
     pub(crate) response_type: ResponseType,
@@ -146,43 +131,5 @@ pub struct Response{
 }
 
 impl Response {
-    pub fn HTML(status_code: i32, response_body: String) -> Response{
-        return Response {
-            http_status: status_code::from_status_code(status_code),
-            content_type: mime::HTML.to_string(),
-            response_type: ResponseType::Html,
-            response_body: response_body,
-        }
-    }
-
-    pub fn FILE(status_code: i32, file_path: &str) -> Response{
-        // Read file into vector.
-        println!("Searching:{}", file_path);
-        return match File::open(file_path){
-            Ok(file) => {
-                let mut reader = BufReader::new(file);
-                let mut buffer = Vec::new();
-                // Read file into vector.
-                reader.read_to_end(&mut buffer);
-                let body = unsafe {from_utf8_unchecked(&buffer).to_string() };
-                Response {
-                    http_status: status_code::from_status_code(status_code),
-                    content_type: match mime_guess::from_path(file_path).first(){
-                        Some(mime) => { mime.to_string() },
-                        None => { mime::TEXT.to_string() },
-                    },
-                    response_type: ResponseType::Html,
-                    response_body: body,
-                }
-            },
-            Err(e) => {
-                Response {
-                    http_status: status_code::from_status_code(status_code::NOT_FOUND),
-                    content_type: mime::HTML.to_string(),
-                    response_type: ResponseType::Html,
-                    response_body: "Not Found".to_string(),
-                }
-            },
-        };
-    }
+    
 }
