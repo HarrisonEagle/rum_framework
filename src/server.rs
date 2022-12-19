@@ -55,8 +55,12 @@ impl RumServer {
         self.handler.add_route(method_type, route, handler);
     }
 
-    pub fn middleware(&mut self, handlers: Vec<fn(&mut RumContext)>){
-        self.handler.set_middleware(handlers);
+    pub fn global_middleware(&mut self, handlers: Vec<fn(&mut RumContext)>){
+        self.handler.set_middleware("", handlers);
+    }
+
+    pub fn middleware(&mut self, route: &str, handlers: Vec<fn(&mut RumContext)>){
+        self.handler.set_middleware(route, handlers);
     }
 
     pub fn get(&mut self, route: &str, handler: fn(&mut RumContext)) {

@@ -37,7 +37,7 @@ impl RumContext<'_> {
         };
     }
 
-    pub(crate) fn has_response(&self) -> bool{
+    pub(crate) fn has_response(&self) -> bool {
         return self.response.is_some();
     }
 
@@ -147,7 +147,6 @@ impl RumContext<'_> {
     pub fn set_response_header(&mut self, key: &str, value: &str) {
         self.response_header
             .insert(key.to_string(), value.to_string());
-        println!("Header: {}", self.response_header.len());
     }
 
     pub fn remove_response_header(&mut self, key: &str) {

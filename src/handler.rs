@@ -37,23 +37,33 @@ impl Handler {
         &mut self,
         method_type: MethodType,
         route: &str,
-        handler: fn(&mut RumContext),
+        controller: fn(&mut RumContext),
     ) {
         let mut route_segs: Vec<&str> = route.trim_end_matches('/').split('/').collect();
         if route_segs[0] != "" {
             route_segs.insert(0, "");
         }
-        self.router.modify(method_type, route_segs, 0, handler);
+        let router = match self.router.search_route_mut(&route_segs, 0) {
+            Some(router) => router,
+            None => self.router.modify(route_segs, 0),
+        };
+        router.add_controller(method_type, controller);
     }
 
     pub(crate) fn set_static_assets(&mut self, static_asset_path: &str) {
         self.static_asset_path = Some(static_asset_path.to_string());
     }
 
-    pub(crate) fn set_middleware(&mut self, handlers: Vec<fn(&mut RumContext)>) {
-        for handler in handlers {
-            self.router.add_middleware(handler)
+    pub(crate) fn set_middleware(&mut self, route: &str, handlers: Vec<fn(&mut RumContext)>) {
+        let mut route_segs: Vec<&str> = route.trim_end_matches('/').split('/').collect();
+        if route_segs[0] != "" {
+            route_segs.insert(0, "");
         }
+        let router =  match self.router.search_route_mut(&route_segs, 0) {
+            Some(router) => router,
+            None => self.router.modify(route_segs, 0),
+        };
+        router.add_middleware(handlers);
     }
 
     pub(crate) fn handle_connection(&self, mut stream: TcpStream) {
@@ -133,11 +143,11 @@ impl Handler {
                 }
                 let route_seg_slice = &route_segs[..];
                 let last_key = route_segs[route_segs.len() - 1];
-                let route_info = self
+                match self
                     .router
-                    .get_full_route(http_method_type, route_seg_slice);
-                match route_info {
-                    Some((full_route_info, handler)) => {
+                    .get_info_and_controller(http_method_type, route_seg_slice)
+                {
+                    Some((full_route_info, controller)) => {
                         self.router.exec_middleware(full_route_info, 0, context);
                         if !context.has_response() {
                             for index in 0..full_route_info.len() {
@@ -147,7 +157,7 @@ impl Handler {
                                     context.set_url_params(key, val);
                                 }
                             }
-                            handler(context);
+                            controller(context);
                         }
                         context.get_response(http_ver)
                     }

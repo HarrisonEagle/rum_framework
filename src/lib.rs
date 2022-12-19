@@ -1,16 +1,16 @@
-mod server;
-mod thread;
+pub mod context;
+mod handler;
 mod method;
 mod response;
-mod handler;
 pub mod router;
+mod server;
 pub mod status_code;
-pub mod context;
+mod thread;
 
 pub mod rum {
     use crate::server::RumServer;
 
-    pub fn new(host: &str, port: i32) -> RumServer{
+    pub fn new(host: &str, port: i32) -> RumServer {
         return RumServer::new(host, port);
     }
 }
