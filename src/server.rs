@@ -126,7 +126,9 @@ fn handle_connection(mut stream: TcpStream, root_router: Arc<RootRouter>) {
     let mut request_header_parsed = false;
     let mut request_body = String::new();
     let context = &mut RumContext::new(root_router.template_engine.as_ref());
+    // parse the request
     for (index,line) in requests.lines().enumerate() {
+        // the border of header and body
         if line.len() == 0 {
             request_header_parsed = true;
             continue;
@@ -134,17 +136,52 @@ fn handle_connection(mut stream: TcpStream, root_router: Arc<RootRouter>) {
         if index == 0 {
             let mut iter = line.splitn(3," ");
             http_method_str = iter.next().unwrap();
-            route = iter.next().unwrap();
+            let route_with_query = iter.next().unwrap();
+            let mut iter_q = route_with_query.split("?");
+            route = iter_q.next().unwrap();
+            //parse query params
+            match iter_q.next() {
+                Some(q) => {
+                    let queries = q.split("&").into_iter();
+                    for query in queries{
+                        let mut iter_qi = query.splitn(2, "=");
+                        let key = iter_qi.next().unwrap_or_else(|| "");
+                        let val = iter_qi.next().unwrap_or_else(|| "");
+                        if key != "" && val != "" {
+                            context.set_query_params(key, val);
+                        }
+                    }
+                },
+                None => {},
+            }
             http_ver = iter.next().unwrap();
         }else if !request_header_parsed{
             let mut iter = line.splitn(2,": ");
             let key = iter.next().unwrap();
             let value = iter.next().unwrap();
-            println!("{}", key);
             context.set_request_header(key, value);
         }else {
-            request_body = format!("{}\r\n{}", request_body, line);
+            request_body = format!("{}{}", request_body, line);
         }
+    }
+
+    request_body = request_body.trim().to_string();
+    mime::APPLICATION_WWW_FORM_URLENCODED.to_string();
+    let content_type = match context.get_request_header("Content-Type") {
+        Some(value) => value,
+        None => "",
+    };
+    
+    if content_type.contains(&mime::APPLICATION_WWW_FORM_URLENCODED.to_string()){
+        let form_params = request_body.split("&").into_iter();
+            for param in form_params{
+                let mut iter_fi = param.splitn(2, "=");
+                let key = iter_fi.next().unwrap_or_else(|| "");
+                let val = iter_fi.next().unwrap_or_else(|| "");
+                if key != "" && val != "" {
+                    context.set_form_params(key, val);
+                }
+            }
     }
     context.set_request_body(request_body);
     
@@ -158,14 +195,19 @@ fn handle_connection(mut stream: TcpStream, root_router: Arc<RootRouter>) {
             let last_key = route_segs[route_segs.len() - 1];
             let route_info = root_router.router.get_full_route(http_method_type, route_seg_slice);
             match route_info {
-                Some(info) => {
-                    route_seg_slice[0];
+                Some((full_route_info, handler)) => {
                     //root_router.router.exec_middleware(info.0, 0);
-                    info.1(context);
+                    for index in 0..full_route_info.len()-1 {
+                        if full_route_info[index].starts_with(":") {
+                            let key = full_route_info[index].trim_matches(':');
+                            let val = route_seg_slice[index];
+                            context.set_url_params(key, val);
+                        }
+                    }
+                    handler(context);
                     context.get_response(http_ver)
                 },
                 None => {
-                    // NEED?
                     let static_path = root_router.static_asset_path.as_ref();
                     if static_path.is_some() {
                         let file_path = format!("{}/{}", *(static_path.unwrap()), last_key);

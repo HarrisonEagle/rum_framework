@@ -9,6 +9,9 @@ pub struct RumContext<'a>{
     request_header: BTreeMap<String, String>,
     request_body: String,
     response_header: BTreeMap<String, String>,
+    url_params: BTreeMap<String, String>,
+    query_params: BTreeMap<String, String>,
+    form_params: BTreeMap<String, String>,
     response: Option<Response>,
 }
 
@@ -20,6 +23,9 @@ impl RumContext<'_> {
             request_header: BTreeMap::default(),
             request_body: String::new(),
             response_header: BTreeMap::default(),
+            url_params: BTreeMap::default(),
+            query_params: BTreeMap::default(),
+            form_params: BTreeMap::default(),
             response: None,
         };
     }
@@ -125,6 +131,30 @@ impl RumContext<'_> {
 
     pub fn remove_response_header(&mut self, key: &str){
         self.response_header.remove(key);
+    }
+
+    pub fn get_url_params(&self, key: &str) -> Option<&String>{
+        return self.url_params.get(key);
+    }
+
+    pub(crate) fn set_url_params(&mut self, key: &str, value: &str){
+        self.url_params.insert(key.to_string(), value.to_string());
+    }
+
+    pub fn get_query_params(&self, key: &str) -> Option<&String>{
+        return self.query_params.get(key);
+    }
+
+    pub(crate) fn set_query_params(&mut self, key: &str, value: &str){
+        self.query_params.insert(key.to_string(), value.to_string());
+    }
+
+    pub fn get_form_params(&self, key: &str) -> Option<&String>{
+        return self.form_params.get(key);
+    }
+
+    pub(crate) fn set_form_params(&mut self, key: &str, value: &str){
+        self.form_params.insert(key.to_string(), value.to_string());
     }
 
     pub(crate) fn get_response(&self, http_ver: &str) -> (String, String){

@@ -79,24 +79,23 @@ impl Router {
         let method_type_str = method_type.to_string();
         if cur_index == route_segs.len() - 1 {
             if self.handlers.contains_key(&method_type_str) {
-                // TODO: THROW ERROR
                 panic!("Error: Method->{} Route->{} already exists", method_type, self.route );
             }
             self.handlers.insert(method_type_str, handler);
         }else{
-            let new_seg = route_segs[cur_index+1].to_string();
+            let new_seg = route_segs[cur_index+1];
             if new_seg.starts_with(":") {
                 if self.params_child_route != "" && new_seg != self.params_child_route{
                     panic!("Error: params {} conflict with params {}", new_seg ,self.params_child_route);
                 }
-                self.params_child_route = new_seg;
+                self.params_child_route = new_seg.to_string();
             }
-            self.children.entry( route_segs[cur_index+1].to_string()).or_insert(Router {
-                route: route_segs[cur_index+1].to_string(),
+            self.children.entry( new_seg.to_string()).or_insert(Router {
+                route: new_seg.to_string(),
                 children: BTreeMap::new(), 
                 params_child_route: String::new(),
                 handlers: BTreeMap::new(),
-                full_route: (&route_segs[..=cur_index+1]).to_vec().iter().map(|s| s.to_string()).collect()
+                full_route: (&route_segs[..=cur_index+1]).to_vec().iter().map(|&s| s.to_string()).collect()
             });
             let router = self.children.get_mut(route_segs[cur_index + 1]).unwrap();
             router.modify(method_type,route_segs, cur_index + 1,  handler);
