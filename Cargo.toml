@@ -1,7 +1,10 @@
 [package]
 name = "rum_framework"
-version = "0.1.0"
+version = "0.0.1"
 edition = "2021"
+license = "MIT"
+authors = ["HarrisonOwl <hyzitbios@hotmail.com>"]
+description = "A toy web framework inspired by gin-gonic and express-js."
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
