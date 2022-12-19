@@ -1,14 +1,14 @@
 use std::collections::BTreeMap;
-use strum_macros::Display;
 extern crate mime;
-use strum_macros::EnumString;
 use crate::context::RumContext;
+use crate::method::MethodType;
+use crate::response::Response;
 
 pub struct Router {
     pub route: String,
     children: BTreeMap<String, Router>,
     params_child_route: String,
-    handlers: BTreeMap<String, fn(c: RumContext) -> Response>,
+    handlers: BTreeMap<String, fn(c: &mut RumContext)>,
     full_route: Vec<String>,
 }
 
@@ -20,11 +20,11 @@ impl Router {
             children: BTreeMap::new(),
             params_child_route: "".to_string(),
             handlers: BTreeMap::new(),
-            full_route: vec!["".to_string()]
+            full_route: vec!["".to_string()],
         };
     }
 
-    pub(crate) fn get_full_route(&self,method_type: MethodType, route_segs: &[&str]) -> Option<(&[String], &fn(RumContext) -> Response)>{
+    pub(crate) fn get_full_route(&self,method_type: MethodType, route_segs: &[&str]) -> Option<(&[String], &fn(&mut RumContext))>{
         return match self.search_route(method_type, route_segs, 0) {
             Some(result) => { Some(result) },
             None => { None },
@@ -43,7 +43,7 @@ impl Router {
         }
     }
 
-    fn search_route(&self, method_type: MethodType, route_segs: &[&str], cur_index: usize ) -> Option<(&[String], &fn(RumContext) -> Response)>{
+    fn search_route(&self, method_type: MethodType, route_segs: &[&str], cur_index: usize ) -> Option<(&[String], &fn(&mut RumContext))>{
         if cur_index == route_segs.len() - 1{
             for (key, value) in self.handlers.iter() {
                 if *key == method_type.to_string(){
@@ -76,7 +76,7 @@ impl Router {
         }
     }
 
-    pub(crate) fn modify(&mut self, method_type: MethodType, route_segs: Vec<&str>, cur_index: usize, handler: fn(RumContext) -> Response){
+    pub(crate) fn modify(&mut self, method_type: MethodType, route_segs: Vec<&str>, cur_index: usize, handler: fn(&mut RumContext)){
         let method_type_str = method_type.to_string();
         if cur_index == route_segs.len() - 1 {
             if self.handlers.contains_key(&method_type_str) {
@@ -104,31 +104,4 @@ impl Router {
         }
     }
 
-}
-#[derive(Debug, Display, EnumString)]
-pub enum MethodType{
-    GET,
-    POST,
-    PUT,
-    DELETE,
-    CONNECT,
-    OPTIONS,
-    TRACE,
-    PATCH
-}
-
-pub enum ResponseType{
-    Text,
-    Html,
-    Json
-}
-
-pub struct Response{
-    pub(crate) http_status: String,
-    pub(crate) content_type: String,
-    pub(crate) response_body: String
-}
-
-impl Response {
-    
 }
