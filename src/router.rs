@@ -9,6 +9,7 @@ pub struct Router {
     params_child_route: String,
     handlers: BTreeMap<String, fn(c: &mut RumContext)>,
     full_route: Vec<String>,
+    middleware: Vec<fn(c: &mut RumContext)>,
 }
 
 impl Router {
@@ -18,7 +19,8 @@ impl Router {
             children: BTreeMap::new(),
             params_child_route: String::new(),
             handlers: BTreeMap::new(),
-            full_route: vec![String::new()],
+            full_route: Vec::new(),
+            middleware: Vec::new(),
         };
     }
 
@@ -44,6 +46,10 @@ impl Router {
                 None => {}
             };
         }
+    }
+    
+    pub(crate) fn add_middleware(&self, handler: fn(&mut RumContext)){
+        
     }
 
     fn search_route(
@@ -126,6 +132,7 @@ impl Router {
                 children: BTreeMap::new(),
                 params_child_route: String::new(),
                 handlers: BTreeMap::new(),
+                middleware: Vec::new(),
                 full_route: (&route_segs[..=cur_index + 1])
                     .to_vec()
                     .iter()

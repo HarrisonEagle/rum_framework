@@ -2,6 +2,7 @@ mod server;
 mod thread;
 mod method;
 mod response;
+mod handler;
 pub mod router;
 pub mod status_code;
 pub mod context;
