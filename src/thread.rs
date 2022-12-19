@@ -8,7 +8,7 @@ enum Message {
     Terminate,
 }
 
-pub struct ThreadPool {
+pub(crate) struct ThreadPool {
     workers: Vec<Worker>,
     sender: mpsc::Sender<Message>,
 }

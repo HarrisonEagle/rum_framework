@@ -1,6 +1,5 @@
 use crate::context::RumContext;
 use crate::handler::Handler;
-use crate::handler::handle_connection;
 use crate::method::MethodType;
 use crate::thread::ThreadPool;
 use std::net::TcpListener;
@@ -45,9 +44,9 @@ impl RumServer {
         handler.router.show_routes("");
         for stream in listener.incoming() {
             let stream = stream.unwrap();
-            let router = Arc::clone(&handler);
+            let handler = Arc::clone(&handler);
             pool.execute(move || {
-                handle_connection(stream, router);
+                handler.handle_connection(stream);
             });
         }
     }

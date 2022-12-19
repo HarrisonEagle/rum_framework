@@ -1,4 +1,4 @@
-pub struct Response {
+pub(crate) struct Response {
     pub(crate) http_status: String,
     pub(crate) response_body: String,
 }

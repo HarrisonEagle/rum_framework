@@ -51,10 +51,8 @@ impl Handler {
         }
     }
 
-}
-
-pub(crate) fn handle_connection(mut stream: TcpStream, handler: Arc<Handler>) {
-    let mut buffer = [0; 1024];
+    pub(crate) fn handle_connection(&self, mut stream: TcpStream) {
+        let mut buffer = [0; 1024];
     stream.read(&mut buffer).unwrap();
     let requests = String::from_utf8_lossy(&buffer[..]);
     let mut http_method_str = "";
@@ -62,7 +60,7 @@ pub(crate) fn handle_connection(mut stream: TcpStream, handler: Arc<Handler>) {
     let mut http_ver = "";
     let mut request_header_parsed = false;
     let mut request_body = String::new();
-    let context = &mut RumContext::new(handler.template_engine.as_ref());
+    let context = &mut RumContext::new(self.template_engine.as_ref());
     // parse the request
     for (index, line) in requests.lines().enumerate() {
         // the border of header and body
@@ -130,7 +128,7 @@ pub(crate) fn handle_connection(mut stream: TcpStream, handler: Arc<Handler>) {
             }
             let route_seg_slice = &route_segs[..];
             let last_key = route_segs[route_segs.len() - 1];
-            let route_info = handler
+            let route_info = self
                 .router
                 .get_full_route(http_method_type, route_seg_slice);
             match route_info {
@@ -147,7 +145,7 @@ pub(crate) fn handle_connection(mut stream: TcpStream, handler: Arc<Handler>) {
                     context.get_response(http_ver)
                 }
                 None => {
-                    let static_path = handler.static_asset_path.as_ref();
+                    let static_path = self.static_asset_path.as_ref();
                     if static_path.is_some() {
                         let file_path = format!("{}/{}", *(static_path.unwrap()), last_key);
                         context.file(status_code::OK, &file_path);
@@ -168,4 +166,6 @@ pub(crate) fn handle_connection(mut stream: TcpStream, handler: Arc<Handler>) {
     stream.flush().unwrap();
 
     println!("|{}| {} {}", http_method_str, route, http_status);
+    }
+
 }
